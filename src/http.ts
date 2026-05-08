@@ -28,6 +28,22 @@ export async function startHttpServer(config: ServerConfig): Promise<Server> {
 
   const authMiddleware = createBearerAuthMiddleware(config.authToken);
 
+  /** Browsers hit `/` by default; Express otherwise responds with "Cannot GET /". */
+  app.get("/", (_req, res) => {
+    res.json({
+      service: config.serverName,
+      version: config.serverVersion,
+      message:
+        "This is an MCP server, not a web app. Configure your MCP client (e.g. Cursor) to use POST /mcp or GET /sse on this host.",
+      paths: {
+        health: config.healthPath,
+        streamableHttp: "/mcp",
+        sse: "/sse",
+        sseMessages: "/messages",
+      },
+    });
+  });
+
   /** Intentionally unauthenticated for orchestrator probes; keep MCP behind MCP_AUTH_TOKEN + TLS. */
   app.get(config.healthPath, (_req, res) => {
     res.json({

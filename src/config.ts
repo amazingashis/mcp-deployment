@@ -1,11 +1,27 @@
 import path from "node:path";
 
+function normalizeAllowedHostEntry(entry: string): string {
+  const h = entry.trim().replace(/\/+$/, "");
+  if (!h) return "";
+  try {
+    if (h.includes("://")) {
+      return new URL(h).hostname;
+    }
+  } catch {
+    /* fall through */
+  }
+  return h;
+}
+
 function parseAllowedHosts(raw: string | undefined): string[] | undefined {
   if (!raw?.trim()) return undefined;
-  return raw
+  const list = raw
     .split(",")
-    .map((h) => h.trim())
+    .map((h) => normalizeAllowedHostEntry(h))
     .filter(Boolean);
+  /** Empty array would still enable host middleware and reject every request */
+  if (list.length === 0) return undefined;
+  return list;
 }
 
 export type ServerConfig = {

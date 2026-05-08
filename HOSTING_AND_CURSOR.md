@@ -136,6 +136,18 @@ Some clients open the SSE stream without forwarding custom headers. If you get *
 
 Always use **`https://`** in the URL. Do not point production MCP at plain `http://` over the public internet.
 
+### `Invalid Host: your.onrender.com` in the browser
+
+That JSON is **not** a normal web page; it means the **`Host`** header did not match **`MCP_ALLOWED_HOSTS`**.
+
+Fix on Render:
+
+1. Set **`MCP_ALLOWED_HOSTS`** to the hostname **only** (no `https://`, no path), e.g. `mcp-deployment-fzca.onrender.com`.
+2. It must match your live URL **exactly** (no typo vs `onrender.com`).
+3. If you pasted a full URL, redeploy after upgrading the server: newer builds accept `https://host/` in **`MCP_ALLOWED_HOSTS`** and normalize it to the hostname.
+
+Opening **`https://…/sse`** or **`/mcp`** in a browser often hits MCP with a **`Host`** that still must be on the allowlist; **`/health`** is not subject to that check.
+
 ---
 
 ## 5. Sanity checks from your laptop
