@@ -1,0 +1,41 @@
+# Example fragment for Databricks Asset Bundles (DAB).
+# Merge under: resources.jobs.<your_job_name>
+# Replace placeholders: paths, keys, cluster policy, variables.
+
+name: example_etl_job
+# schedule:
+#   quartz_cron_expression: "0 0 7 * * ?"
+#   timezone_id: "America/New_York"
+
+job_clusters:
+  - job_cluster_key: etl_shared
+    new_cluster:
+      spark_version: 15.4.x-scala2.12
+      node_type_id: SET_VIA_BUNDLE_VARIABLE
+      num_workers: 2
+      spark_env_vars:
+        ENV: "${var.environment}"
+
+tasks:
+  - task_key: bronze_ingest
+    job_cluster_key: etl_shared
+    notebook_task:
+      notebook_path: /Workspace/Shared/etl/bronze_ingest
+      base_parameters:
+        run_date: "{{job.start_time.iso_date}}"
+
+  - task_key: silver_transform
+    depends_on:
+      - task_key: bronze_ingest
+    job_cluster_key: etl_shared
+    notebook_task:
+      notebook_path: /Workspace/Shared/etl/silver_transform
+
+  - task_key: gold_publish
+    depends_on:
+      - task_key: silver_transform
+    job_cluster_key: etl_shared
+    notebook_task:
+      notebook_path: /Workspace/Shared/etl/gold_publish
+
+# Optional: email_notifications, timeout_seconds, max_concurrent_runs, etc.

@@ -1,0 +1,34 @@
+{
+  "name": "example_etl_job",
+  "max_concurrent_runs": 1,
+  "job_clusters": [
+    {
+      "job_cluster_key": "etl_shared",
+      "new_cluster": {
+        "spark_version": "15.4.x-scala2.12",
+        "node_type_id": "REPLACE_ME",
+        "num_workers": 2
+      }
+    }
+  ],
+  "tasks": [
+    {
+      "task_key": "bronze_ingest",
+      "job_cluster_key": "etl_shared",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Shared/etl/bronze_ingest",
+        "base_parameters": {
+          "run_date": "{{job.start_time.iso_date}}"
+        }
+      }
+    },
+    {
+      "task_key": "silver_transform",
+      "depends_on": [{ "task_key": "bronze_ingest" }],
+      "job_cluster_key": "etl_shared",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Shared/etl/silver_transform"
+      }
+    }
+  ]
+}

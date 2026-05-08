@@ -1,0 +1,15 @@
+services:
+  skills-mcp:
+    build: .
+    ports:
+      - "8787:8787"
+    environment:
+      MCP_TRANSPORT: http
+      HOST: "0.0.0.0"
+      PORT: "8787"
+      SKILLS_ROOT: /app/skills
+      MCP_ALLOWED_HOSTS: "${MCP_ALLOWED_HOSTS:-localhost,127.0.0.1}"
+      MCP_AUTH_TOKEN: "${MCP_AUTH_TOKEN:-}"
+      MCP_SERVER_NAME: skills-mcp-server
+    volumes:
+      - ./skills:/app/skills:ro
