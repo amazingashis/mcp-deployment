@@ -108,6 +108,8 @@ Do **not** commit real tokens. Set them only in the host’s secret / env UI.
 }
 ```
 
+**Authorization format:** the value must be the literal string `Bearer` (capital B), a space, then your secret — e.g. `"Bearer 6ef573db..."`. If you put only the hex secret with no `Bearer ` prefix, some clients still send it, but the server now also accepts a **single token with no spaces** as the whole header value. Prefer `Bearer ...` anyway.
+
 ### Option B — Streamable HTTP
 
 ```json

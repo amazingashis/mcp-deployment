@@ -1,4 +1,5 @@
 import type { Server } from "node:http";
+import type { Request, Response } from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
@@ -71,7 +72,8 @@ export async function startHttpServer(config: ServerConfig): Promise<Server> {
   const ssePath = "/sse";
   const messagesPath = "/messages";
 
-  app.post(mcpPath, authMiddleware, async (req, res) => {
+  /** Cursor probes Streamable HTTP with POST on the same URL as SSE (`/sse`). */
+  const handleStreamableHttpPost = async (req: Request, res: Response): Promise<void> => {
     const mcp = createSkillsMcpServer(config);
     try {
       const transport = new StreamableHTTPServerTransport({
@@ -93,7 +95,10 @@ export async function startHttpServer(config: ServerConfig): Promise<Server> {
         });
       }
     }
-  });
+  };
+
+  app.post(mcpPath, authMiddleware, handleStreamableHttpPost);
+  app.post(ssePath, authMiddleware, handleStreamableHttpPost);
 
   app.get(mcpPath, authMiddleware, (_req, res) => {
     res.status(405).json({

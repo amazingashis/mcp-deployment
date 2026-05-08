@@ -12,23 +12,26 @@ export function createBearerAuthMiddleware(expectedToken: string | undefined): R
     if (!buf?.length) {
       return next();
     }
-    const header = req.headers.authorization;
-    const prefix = "Bearer ";
+    const header = req.headers.authorization?.trim();
+    const prefix = /^Bearer\s+/i;
     const send401 = (): void => {
       res.status(401);
       res.setHeader("WWW-Authenticate", 'Bearer realm="skills-mcp", charset="UTF-8"');
       res.json({
         error: "invalid_token",
         message:
-          "Bearer token rejected — value must match MCP_AUTH_TOKEN on Render exactly. OAuth /register is not supported.",
+          "Use Authorization: Bearer <MCP_AUTH_TOKEN> (note the word Bearer before your secret). Raw token-only works only if the header has no spaces.",
       });
     };
 
-    if (!header?.startsWith(prefix)) {
+    if (!header?.length) {
       send401();
       return;
     }
-    const presented = Buffer.from(header.slice(prefix.length).trim(), "utf8");
+    const credential = prefix.test(header)
+      ? header.replace(prefix, "").trim()
+      : header.trim();
+    const presented = Buffer.from(credential, "utf8");
     if (presented.length !== buf.length || !crypto.timingSafeEqual(presented, buf)) {
       send401();
       return;
