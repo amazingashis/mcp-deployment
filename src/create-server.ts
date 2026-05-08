@@ -2,13 +2,22 @@ import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mc
 import { z } from "zod";
 import type { ServerConfig } from "./config.js";
 import { SkillsRegistry } from "./skills-registry.js";
+import { capabilityKeyList, type UsageTracker } from "./usage-tracker.js";
+
+export type CreateSkillsMcpServerOptions = {
+  usageTracker?: UsageTracker;
+};
 
 const INSTRUCTIONS = `This server exposes Cursor-style agent skills as MCP resources and tools.
 Workflow: call list_skills or read resources under skills://skill/{id}; use get_skill to fetch full SKILL.md text for injection into the agent context.
 Prefer resources for discovery; use tools when the client does not list resources.`;
 
-export function createSkillsMcpServer(config: ServerConfig): McpServer {
+export function createSkillsMcpServer(
+  config: ServerConfig,
+  options?: CreateSkillsMcpServerOptions,
+): McpServer {
   const registry = new SkillsRegistry(config.skillsRoot);
+  const tracker = options?.usageTracker;
 
   const server = new McpServer(
     { name: config.serverName, version: config.serverVersion },
@@ -21,6 +30,19 @@ export function createSkillsMcpServer(config: ServerConfig): McpServer {
       },
     },
   );
+
+  if (tracker) {
+    server.server.oninitialized = () => {
+      const impl = server.server.getClientVersion();
+      tracker.attachClientHints(
+        impl
+          ? { name: impl.name ?? "unknown", version: impl.version ?? "" }
+          : undefined,
+        capabilityKeyList(server.server.getClientCapabilities() as Record<string, unknown> | undefined),
+      );
+      tracker.recordMcpInitialized();
+    };
+  }
 
   const skillTemplate = new ResourceTemplate("skills://skill/{skillId}", {
     list: async () => {
@@ -52,6 +74,7 @@ export function createSkillsMcpServer(config: ServerConfig): McpServer {
     },
     async (uri, _vars) => {
       const id = registry.parseSkillUri(uri.toString());
+      tracker?.recordResourceRead("skill", id ?? undefined);
       if (!id) {
         return {
           contents: [],
@@ -83,6 +106,7 @@ export function createSkillsMcpServer(config: ServerConfig): McpServer {
       inputSchema: {},
     },
     async () => {
+      tracker?.recordToolCall("list_skills", {});
       const skills = await registry.listSkills();
       const lines = skills.map(
         (s) =>
@@ -111,6 +135,7 @@ export function createSkillsMcpServer(config: ServerConfig): McpServer {
       },
     },
     async ({ skill_id }) => {
+      tracker?.recordToolCall("get_skill", { skill_id });
       const text = await registry.getSkillMarkdown(skill_id);
       if (!text) {
         return {
@@ -133,6 +158,7 @@ export function createSkillsMcpServer(config: ServerConfig): McpServer {
       },
     },
     async ({ query }) => {
+      tracker?.recordToolCall("search_skills", { query });
       const found = await registry.search(query);
       const lines = found.map(
         (s) =>
@@ -161,6 +187,7 @@ export function createSkillsMcpServer(config: ServerConfig): McpServer {
       },
     },
     async ({ skill_id }) => {
+      tracker?.recordPrompt("skill_context", skill_id);
       const text = await registry.getSkillMarkdown(skill_id);
       if (!text) {
         return {

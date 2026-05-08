@@ -44,6 +44,16 @@ If one URL fails in Cursor, try the other. Both honor **`MCP_AUTH_TOKEN`** when 
    | `MCP_AUTH_TOKEN` | Your long random secret |
    | `SKILLS_ROOT` | `/app/skills` (matches Dockerfile) |
 
+   **Usage dashboard** (optional — same service, no extra domain):
+
+   | Variable | Value |
+   |----------|--------|
+   | `MCP_USAGE_TRACKING` | `true` |
+   | `MCP_USAGE_LOG` | `/tmp/skills-mcp-usage.ndjson` *(recommended on PaaS — survives restarts of the process but not full redeploys unless you add disk)* |
+   | `MCP_USAGE_WEB` | `true` |
+   | `MCP_USAGE_HASH_SALT` | Long random string *(stable “caller key” hashes across reboots)* |
+   | `MCP_USAGE_WEB_USER` / `MCP_USAGE_WEB_PASSWORD` | Set strong values in production *(defaults `cursor` / `cursor`)* |
+
 5. Render provides **HTTPS** automatically. Your MCP base is `https://<service-name>.onrender.com`.
 6. **Health check path**: `/health` (optional but recommended).
 
@@ -85,6 +95,55 @@ Containerize the same Dockerfile; set env vars in the service; use the `run.app`
 | `SKILLS_ROOT` | Path to the skills tree inside the container (`/app/skills` in the provided Dockerfile). |
 
 Do **not** commit real tokens. Set them only in the host’s secret / env UI.
+
+### Optional: usage / audit log (NDJSON)
+
+The server can append one JSON object per line describing MCP client handshakes, tool calls (`list_skills`, `get_skill`, `search_skills`), resource reads (`skill`), and prompts (`skill_context`). Rows include `interactionId`, UTC `ts`, MCP `clientName` / `clientVersion` (from initialize), capability key names, hashed `authCredentialHash` (differentiates Bearer tokens without storing them), optional `remoteAddressHash`, `userAgent`, `host`, `sseSessionHash`, and optional header hashes from **`MCP_USAGE_EXTRA_HEADERS`**. **`search_skills` stores only query length**, not query text—avoid regulated data via config.
+
+| Variable | Purpose |
+|----------|---------|
+| `MCP_USAGE_TRACKING` | `true`/`1`/`yes` enables when set explicitly (`false` disables even if log path exists). |
+| `MCP_USAGE_LOG` | If `MCP_USAGE_TRACKING` is unset: setting this path **enables** tracking. Default path when omitted: `reports/skills-mcp-usage.ndjson` (relative to `cwd`). |
+| `MCP_USAGE_HASH_SALT` | Stable secret so Bearer hashes correlate across restarts—set in production when you aggregate by “caller key”. |
+| `MCP_USAGE_EXTRA_HEADERS` | Comma-separated header names whose **values are logged as salted hashes** (e.g. `x-project-id`). |
+
+Do not use for PHI without a security/compliance review.
+
+### Usage web UI on hosted platforms (Render, Railway, Fly, Koyeb, Cloud Run, …)
+
+The dashboard is served by the **same** Node process as MCP. You do **not** deploy a separate site; you only set env vars and open a path on your existing HTTPS URL.
+
+**1. Add these in your host’s Environment / Secrets UI** (names are exact):
+
+| Variable | Example / note |
+|----------|----------------|
+| `MCP_USAGE_TRACKING` | `true` — required to append audit lines. |
+| `MCP_USAGE_WEB` | `true` — exposes the HTML UI and JSON API. |
+| `MCP_USAGE_LOG` | **`/tmp/skills-mcp-usage.ndjson`** on most PaaS (writable, simple). Under `/app/reports/...` works in the Dockerfile if the user can create that directory (it is). Prefer **`/tmp/...`** when the platform uses a read-only app layer. |
+| `MCP_USAGE_HASH_SALT` | Long random string in secrets — same token → same hash after restarts. |
+| `MCP_USAGE_WEB_PATH` | Optional; default **`/usage`**. |
+| `MCP_USAGE_WEB_USER` / `MCP_USAGE_WEB_PASSWORD` | Set both in production (**defaults `cursor` / `cursor`** are insecure if the URL is public). |
+
+**2. Redeploy** so the service picks up the variables.
+
+**3. Open the dashboard in a browser:**
+
+`https://<YOUR_PUBLIC_HOST><MCP_USAGE_WEB_PATH>`  
+
+Examples:
+
+- Default path: **`https://skills-mcp-server.onrender.com/usage`**
+- Custom path (`MCP_USAGE_WEB_PATH=/admin/usage`): **`https://YOUR_HOST/admin/usage`**
+
+**4. Sign in:** your browser prompts for **HTTP Basic Auth** — use **`MCP_USAGE_WEB_USER`** and **`MCP_USAGE_WEB_PASSWORD`** (unless you kept defaults: **`cursor`** / **`cursor`**).
+
+**5. Reverse proxy in front of Node:** if you terminate TLS on nginx/Caddy/etc., proxy **`/`** or at minimum **`/mcp`**, **`/sse`**, **`/messages`**, **`/health`**, and **`/usage`** (or your custom **`MCP_USAGE_WEB_PATH`**). See **`DEPLOYMENT.md`** for an nginx **`location`** example.
+
+**Important**
+
+- **`MCP_AUTH_TOKEN`** protects **MCP** routes (`/mcp`, `/sse`, `/messages`) only. The usage UI uses **separate** Basic Auth (`MCP_USAGE_WEB_*`).
+- Most free hosts use an **ephemeral** filesystem unless you attach a disk—logs may **reset on redeploy**. For long retention use a persistent volume or ship NDJSON elsewhere.
+- Always use **`https://`** — Basic Auth without TLS exposes credentials.
 
 ---
 
@@ -182,3 +241,4 @@ You should get **`200`** on `/health`. **`/sse`** may hang while streaming (that
 | Free HTTPS host | Render / Railway / Fly / Koyeb / Cloud Run — Dockerfile in **`skills-mcp-server`**. |
 | Cursor URL | Prefer **`https://HOST/sse`**; fallback **`https://HOST/mcp`**. |
 | Security | **`MCP_AUTH_TOKEN`** + **`MCP_ALLOWED_HOSTS`** + HTTPS only. |
+| Usage dashboard (hosted) | `MCP_USAGE_TRACKING=true`, `MCP_USAGE_WEB=true`, set log path + `MCP_USAGE_HASH_SALT`; open **`https://HOST/usage`** (Basic Auth `MCP_USAGE_WEB_*`). |

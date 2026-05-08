@@ -17,16 +17,24 @@ docker run --rm -p 8787:8787 \
   -e MCP_ALLOWED_HOSTS=mcp.example.com,localhost \
   -e MCP_AUTH_TOKEN="$TOKEN" \
   -e SKILLS_ROOT=/app/skills \
+  -e MCP_USAGE_TRACKING=true \
+  -e MCP_USAGE_WEB=true \
+  -e MCP_USAGE_LOG=/tmp/skills-mcp-usage.ndjson \
+  -e MCP_USAGE_HASH_SALT="$USAGE_SALT" \
+  -e MCP_USAGE_WEB_USER=cursor \
+  -e MCP_USAGE_WEB_PASSWORD=cursor \
   -v /path/on/host/skills:/app/skills:ro \
   skills-mcp-server:latest
 ```
+
+Omit **`MCP_USAGE_*`** lines if you do not want the NDJSON audit log or **`/usage`** dashboard — they are optional.
 
 `docker-compose.yml` can mirror the same variables.
 
 ## Reverse proxy (recommended)
 
 - Terminate TLS on nginx, Caddy, or a cloud load balancer.
-- Proxy **`/`** to the Node listener (or `/mcp`, `/sse`, `/messages`, and `/health`).
+- Proxy **`/`** to the Node listener (or at least `/mcp`, `/sse`, `/messages`, `/health`, and **`/usage`** if **`MCP_USAGE_WEB=true`**).
 - Enforce **HTTPS** and redirect HTTP → HTTPS at the edge.
 - Forward **`Host`** unchanged so `MCP_ALLOWED_HOSTS` matches.
 
@@ -58,6 +66,14 @@ location /messages {
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_read_timeout 3600s;
 }
+
+# Usage dashboard (Basic Auth handled by Node; omit if MCP_USAGE_WEB is disabled)
+location ^~ /usage {
+    proxy_pass http://127.0.0.1:8787;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
 ```
 
 ## Security checklist
@@ -72,6 +88,7 @@ location /messages {
 
 - Logs go to stderr; avoid capturing full skill bodies at `info` level in shared log sinks if policies require minimal retention.
 - Use **`GET /health`** for Kubernetes `/livez`/`/readyz` (unauthenticated by design).
+- **Usage dashboard (hosted):** set **`MCP_USAGE_WEB=true`**, **`MCP_USAGE_TRACKING=true`**, and **`MCP_USAGE_LOG`**, then browse **`https://<public-host>/usage`** per **`HOSTING_AND_CURSOR.md`**; route **`/usage`** through your ingress.
 
 ## Protocol compliance
 
