@@ -28,6 +28,15 @@ export async function startHttpServer(config: ServerConfig): Promise<Server> {
 
   const authMiddleware = createBearerAuthMiddleware(config.authToken);
 
+  /** Cursor tries OAuth client registration after 401; we are Bearer-only — return JSON instead of HTML. */
+  app.post("/register", (_req, res) => {
+    res.status(404).json({
+      error: "not_supported",
+      message:
+        "OAuth dynamic registration is disabled. Use Authorization: Bearer <MCP_AUTH_TOKEN> and match Render secrets.",
+    });
+  });
+
   /** Browsers hit `/` by default; Express otherwise responds with "Cannot GET /". */
   app.get("/", (_req, res) => {
     res.json({

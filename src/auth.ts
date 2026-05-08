@@ -14,15 +14,23 @@ export function createBearerAuthMiddleware(expectedToken: string | undefined): R
     }
     const header = req.headers.authorization;
     const prefix = "Bearer ";
+    const send401 = (): void => {
+      res.status(401);
+      res.setHeader("WWW-Authenticate", 'Bearer realm="skills-mcp", charset="UTF-8"');
+      res.json({
+        error: "invalid_token",
+        message:
+          "Bearer token rejected — value must match MCP_AUTH_TOKEN on Render exactly. OAuth /register is not supported.",
+      });
+    };
+
     if (!header?.startsWith(prefix)) {
-      res.status(401).setHeader("WWW-Authenticate", 'Bearer charset="UTF-8"');
-      res.end("Unauthorized");
+      send401();
       return;
     }
     const presented = Buffer.from(header.slice(prefix.length).trim(), "utf8");
     if (presented.length !== buf.length || !crypto.timingSafeEqual(presented, buf)) {
-      res.status(401).setHeader("WWW-Authenticate", 'Bearer charset="UTF-8"');
-      res.end("Unauthorized");
+      send401();
       return;
     }
     next();
